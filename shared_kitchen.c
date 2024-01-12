@@ -1,7 +1,7 @@
 #include "shared_kitchen.h"
 
-#define NUM_CARNIVORES 6
-#define NUM_VEGETARIANS 8
+#define NUM_CARNIVORES 3
+#define NUM_VEGETARIANS 3
 
 int main(int argc, char* argv[]) {
     init_factory();

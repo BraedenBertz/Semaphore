@@ -1,4 +1,4 @@
 while true; do
 	echo ------------------------------------------------------------------------------------------------------------------------------------------------------ 
-      ./shared_kitchen  # Replace with the actual command to run your executable
+      ./test_kitchen  # Replace with the actual command to run your executable
 done

@@ -7,6 +7,7 @@
 #include <stdlib.h>
 #include <semaphore.h>
 #include <unistd.h>
+#include <stdbool.h>
 #include "barrier.h"
 //tofu and bread are counters, protected by mutex. barrier is where
 //each set of three threads meets after invoking assemble_sandwhich and before allowing the next
