@@ -3,62 +3,78 @@
 #include "tofu.h"
 #include "meat.h"
 
-void run_carnivores(int NUM_BREAD_THREADS, int NUM_MEAT_THREADS) {
+void init_sandy() {
     sem_init(&meatQueue, 0, 0);
     sem_init(&breadQueue, 0, 0);
     sem_init(&mutex_sandwich, 0, 1);
-    init_barrier(&barrier, 3);
-
-    pthread_t meatThreads[NUM_MEAT_THREADS];
-    pthread_t breadThreads[NUM_BREAD_THREADS];
-    for(int i = 0; i < NUM_BREAD_THREADS; i++) {
-        pthread_create(&breadThreads[i], NULL, (void*)bread_thread, NULL);
-    }
-    for(int i = 0; i < NUM_MEAT_THREADS; i++) {
-        pthread_create(&meatThreads[i], NULL, (void*)meat_thread, NULL);
-    }
-
-    //wait for it to end;
-    void * value;
-    for(int i = 0; i < NUM_BREAD_THREADS; i++) {
-        pthread_join(breadThreads[i], &value);
-    }
-    for(int i = 0; i < NUM_MEAT_THREADS; i++) {
-        pthread_join(meatThreads[i], &value);
-    }
+    pthread_barrier_init(&sldfjs, NULL, 3);
 }
 
-void run_vegetarians(int NUM_BREAD_THREADS, int NUM_TOFU_THREADS) {
-    sem_init(&meatQueue, 0, 0);
-    sem_init(&breadQueue, 0, 0);
-    sem_init(&mutex_sandwich, 0, 1);
-    init_barrier(&barrier, 3);//this is for h2o
+int testcase(char* ordering, int* vars, int size) {
+    pthread_t threads[size];
+    for(int i = 0; i < size; i++) {
+        switch(ordering[i]) {
+            case 'T':
+            pthread_create(&threads[i], NULL, (void*)tofu_thread, NULL);
+            while(vars[i] != tofu) {;}
+            break;
+            case 'B':
+            pthread_create(&threads[i], NULL, (void*)bread_thread, NULL);
+            while(vars[i] != bread) {;}
+            break;
+            case 'M':
+            pthread_create(&threads[i], NULL, (void*)meat_thread, NULL);
+            while(vars[i] != meat) {;}
+            break;
+        }
+    }
+    return 0;
+}
 
-    pthread_t meatThreads[NUM_TOFU_THREADS];
-    pthread_t breadThreads[NUM_BREAD_THREADS];
-    for(int i = 0; i < NUM_BREAD_THREADS; i++) {
-        pthread_create(&breadThreads[i], NULL, (void*)bread_thread, NULL);
-    }
-    for(int i = 0; i < NUM_TOFU_THREADS; i++) {
-        pthread_create(&meatThreads[i], NULL, (void*)tofu_thread, NULL);
-    }
-
-    //wait for it to end;
-    void * value;
-    for(int i = 0; i < NUM_BREAD_THREADS; i++) {
-        pthread_join(breadThreads[i], &value);
-    }
-    for(int i = 0; i < NUM_TOFU_THREADS; i++) {
-        pthread_join(meatThreads[i], &value);
+void generateTestcase(char* ordering, int* vars, int size) {
+    pthread_t threads[size];
+    for(int i = 0; i < size; i++) {
+        switch(ordering[i]) {
+            case 'T':
+            pthread_create(&threads[i], NULL, (void*)tofu_thread, NULL);
+            sem_wait(&mutex_sandwich);
+            vars[i] = tofu;
+            sem_post(&mutex_sandwich);
+            break;
+            case 'B':
+            pthread_create(&threads[i], NULL, (void*)bread_thread, NULL);
+            sem_wait(&mutex_sandwich);
+            vars[i] = bread;
+            sem_post(&mutex_sandwich);
+            break;
+            case 'M':
+            pthread_create(&threads[i], NULL, (void*)meat_thread, NULL);
+            sem_wait(&mutex_sandwich);
+            vars[i] = meat;
+            sem_post(&mutex_sandwich);
+            break;
+        }
     }
 }
 
 int main(int argc, char* argv[]) {
-    if(argc != 3) return -1;
-    int num_tofu = atoi(argv[1]);
-    int num_bread = atoi(argv[2]);
-    if(num_tofu*2 != num_bread) return -2;
-    run_vegetarians(num_bread, num_tofu);
-    run_carnivores(num_bread, num_tofu);
+    char* sequence_of_threads = "BBTBTB";
+    int variables[] = {1, 2, 0, 1, 1, 0};
+    int size = 6;
+    init_sandy();
+    if(testcase(sequence_of_threads, variables, size)) {
+        printf("fail\n");
+    }
+    sequence_of_threads = "BBBBBBTTM";
+    int variables2[] = {1, 2, 3, 4, 5, 6, 0, 0, 0};
+    size = 9;
+    if(testcase(sequence_of_threads, variables2, size)) {
+        printf("fail\n");
+    }
+    int variables3[size];
+    generateTestcase(sequence_of_threads, variables3, size);
+    for(int i = 0; i < size; i++) {
+        printf("%d,", variables3[i]);
+    }
     return 0;
 }

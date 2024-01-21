@@ -3,39 +3,8 @@
 #include "meat.h"
 #include "tofu.h"
 
-void create_sandwich(char* team, bool veggie) {
-    pid_t tid = syscall(SYS_gettid);
-    printf("Worker %d is walking the field. Part of the %s\n", tid, team);
-    fflush(stdout);
-    int NUM_MAIN_INGREDIENT_THREADS = 2;
-    int NUM_BREAD_THREADS = 4;
-    pthread_t mainIngredientThreads[NUM_MAIN_INGREDIENT_THREADS];
-    pthread_t breadThreads[NUM_BREAD_THREADS];
-    for(int i = 0; i < NUM_MAIN_INGREDIENT_THREADS; i++) {
-        if(veggie) {
-            pthread_create(&mainIngredientThreads[i], NULL, (void*)tofu_thread, NULL);
-        } else {
-            pthread_create(&mainIngredientThreads[i], NULL, (void*)meat_thread, NULL);
-        }
-    }
-    for(int i = 0; i < NUM_BREAD_THREADS; i++) {
-        pthread_create(&breadThreads[i], NULL, (void*)bread_thread, NULL);
-    }
-    
-
-    //wait for it to end;
-    void * value;
-    for(int i = 0; i < NUM_BREAD_THREADS; i++) {
-        pthread_join(breadThreads[i], &value);
-    }
-    for(int i = 0; i < NUM_MAIN_INGREDIENT_THREADS; i++) {
-        pthread_join(mainIngredientThreads[i], &value);
-    }
-    printf("Worker %d finished. Part of the %s\n", tid, team);
-   fflush(stdout);
-}
-
 void init_factory() {
+    sem_init(&TestLock, 0, 1);
     sem_init(&mutex, 0, 1);//This is a lock
     sem_init(&Carnivore_turn, 0, 1);//This is a turnstile
     sem_init(&Vegetarian_turn, 0, 1);//This is a turnstile
@@ -47,15 +16,14 @@ void init_factory() {
     sem_init(&tofuQueue, 0, 0);//queue for tofu
     sem_init(&breadQueue, 0, 0);//queue for bread
     sem_init(&mutex_sandwich, 0, 1);//mutex for sandwhich
-    init_barrier(&barrier, 3);//barrier
+    pthread_barrier_init(&sldfjs, NULL, 3);
 }
 
 void Carnivore() {
-    //pid_t tid = syscall(SYS_gettid);
-    //printf("Carnivore enter %d\n", tid);
     //Wait to see if we can enter the store and checkin
     sem_wait(&Carnivore_turn);
     sem_post(&Carnivore_turn);
+    sem_wait(&CCheckin);
     sem_wait(&mutex);
     //A worker can check us in, update the scoreboard
     carnivores++;
@@ -64,7 +32,6 @@ void Carnivore() {
     switch (status) {
     case NEUTRAL: //No one is occupying the kitchen, so we carnivores take over
         status = CARNIVORE;//adjust the state of the kitchen
-        //printStatus(CarnivoreStart, "Carnivore CHECKEDIN1");
         sem_post(&mutex);//let other threads be able to update the scoreboard
         //crucially, since carnivores are in control, we can start making the sandwhich
         break;
@@ -77,7 +44,6 @@ void Carnivore() {
             //ensures that no starvation occurs
             sem_wait(&Vegetarian_turn);
         }
-        //printStatus(CarnivoreStart, "Carnivore CHECKEDIN2");
         //give up the mutex so vegetarian threads can checkout
         sem_post(&mutex);
         //wait until the last Vegetarian exits and signals us to go
@@ -85,7 +51,6 @@ void Carnivore() {
         break;
     case TRANSITION_TO_CARNIVORE:
         //We are already transitioning to carnivore, so just join the queue
-        //printStatus(CarnivoreStart, "Carnivore CHECKEDIN3");
         //give up the mutex so vegetarian threads can checkout
         sem_post(&mutex);
         sem_wait(&CarnivoreQueue);
@@ -93,16 +58,15 @@ void Carnivore() {
     default: 
         //implicitly we are transitioning to vegetarian, but this thread already entered the store and thus can checkin
         //kinda weird, but oh well
-        //printStatus(CarnivoreStart, "Carnivore CHECKEDIN4");
         sem_post(&mutex);
     }
     //start making the sandwhich order
-    create_sandwich("\033[31;1mCarnivore\033[00m", false);
+    create_sandwich(false);
+    sem_wait(&CCheckout);
     //sandwhiches aren't required to hold the mutex because the mutex is for the scoreboard
     sem_wait(&mutex);
     //checkout this thread
     carnivores--;
-    //printStatus(CarnivoreStart, "carnivores FINISHED");
     
     //if the last carnivore is leaving, and we want to transition to vegetarian, then we
     //have to signal all those waiting vegetarian customers
@@ -112,38 +76,29 @@ void Carnivore() {
             int value;
             sem_getvalue(&Vegetarian_turn, &value);
             if(value == 0) {
-                //printStatus(CarnivoreStart, "OPENING Vegetarian TURNSTILE");
-                sem_post(&Vegetarian_turn);//open the Vegetarian turnstile
+                //open the Vegetarian turnstile
+                sem_post(&Vegetarian_turn);
             }
-        }
-        if(vegetarians) {
             for(int i = 0; i < vegetarians; i++) {
                 //let the waiting Vegetarians through
                 sem_post(&VegetarianQueue);
             }
             //Change the state of the kitchen
             status = VEGETARIAN;
-            int value;
-            //We may have been blocked them from checking in so 
-            //now we let them check in again and start building up force majure
-            //stops deadlock, but I don't think its necessary
-            //perhaps somewhere else the solution is incorrect
             sem_getvalue(&Carnivore_turn, &value);
             if(value == 0) {
                 sem_post(&Carnivore_turn);
             }
-            //printStatus(CarnivoreStart, "SIGNALING WAITING Vegetarians");
+
         } else {
             //there are no waiting vegetarians, so we can just make the kitchen ready
             //for either sandwich shop
             status = NEUTRAL;
-            int value;
-            //stops deadlock, but I don't think its necessary
-            //perhaps somewhere else the solution is incorrect
-            sem_getvalue(&Vegetarian_turn, &value);
-            if(value == 0) {
-                sem_post(&Vegetarian_turn);
+            for(int i = 0; i < vegetarians; i++) {
+                //let the waiting Vegetarians through
+                sem_post(&VegetarianQueue);
             }
+            //sem_post(&Vegetarian_turn);
         }
     }
 
@@ -153,28 +108,26 @@ void Carnivore() {
             //there are now more carnivores than vegetarians, so we 
             //will transition to vegetarians
             status = TRANSITION_TO_VEGETARIAN;
-            //printStatus(CarnivoreStart, "LOCKING Carnivore TURNSTILE");
             //block the Carnivore turnstile, not allowing carnviores to enter the store
             sem_wait(&Carnivore_turn);
         }
     }
-    //printStatus(exitStart, "Carnivore EXITED");
+
     //release the scoreboard mutex so other threads can proceed
     sem_post(&mutex);
 }
 
 void Vegetarian() {
-    //pid_t tid = syscall(SYS_gettid);
-    //printf("Vegetarian enter %d\n", tid);
+    
     sem_wait(&Vegetarian_turn);//see if we are blocked from checking in
     sem_post(&Vegetarian_turn);//open the turnstile again
+    sem_wait(&VCheckin);
     sem_wait(&mutex);//acquire the lock
     vegetarians++;
-    //printStatus(Vegetarianstart, "Vegetarians ARRIVED");
+
     switch (status) {
     case NEUTRAL:
         status = VEGETARIAN;
-        //printStatus(VegetarianStart, "Vegetarian CHECKEDIN1");
         sem_post(&mutex);//release the mutex
         break;
     case CARNIVORE:
@@ -182,53 +135,43 @@ void Vegetarian() {
             status = TRANSITION_TO_VEGETARIAN;
             sem_wait(&Carnivore_turn);//lock carnivores from entering the turnstile
         }
-        //printStatus(VegetarianStart, "Vegetarian CHECKEDIN2");
         sem_post(&mutex);//release the mutex
         sem_wait(&VegetarianQueue);//wait for this queue
         break;
     case TRANSITION_TO_VEGETARIAN: 
-        //printStatus(VegetarianStart, "Vegetarian CHECKEDIN3");
         sem_post(&mutex);//release the mutex
         sem_wait(&VegetarianQueue);//wait in the queue
         break;
     default: 
-        //printStatus(VegetarianStart, "Vegetarian CHECKEDIN4");
         sem_post(&mutex);//release the mutex
         break;
     }
 
-    create_sandwich("\033[32;1mVegetarian\033[00m", true);
+    create_sandwich(true);
+    sem_wait(&VCheckout);
     sem_wait(&mutex);
     vegetarians--;
-    //cross the fieldint value;
-    //printStatus(VegetarianStart, "Vegetarians FINISHED");
-    
+
     if(vegetarians == 0) {
         if(status == TRANSITION_TO_CARNIVORE) {
             int value;
             sem_getvalue(&Carnivore_turn, &value);
             if(value == 0) {
-                //printStatus(VegetarianStart, "OPENING Carnivore TURNSTILE");
-                sem_post(&Carnivore_turn);//open the Carnivore turnstile
+                sem_post(&Carnivore_turn);
             }
-        }
-        if(carnivores) {
-            status = CARNIVORE;
-            for(int i = 0; i < carnivores; i++)
+            for(int i = 0; i < carnivores; i++) {
                 sem_post(&CarnivoreQueue);
-            int value;
-            //blocked them from checking in so now we let them check in again and start building up force majure
+            }
+            status = CARNIVORE;
             sem_getvalue(&Vegetarian_turn, &value);
             if(value == 0) {
-                sem_post(&Carnivore_turn);
+                sem_post(&Vegetarian_turn);
             }
-            //printStatus(VegetarianStart, "SIGNALING WAITING carnivores");
+
         } else {
             status = NEUTRAL;
-            int value;
-            sem_getvalue(&Carnivore_turn, &value);
-            if(value == 0) {
-                sem_post(&Carnivore_turn);
+            for(int i = 0; i < carnivores; i++) {
+                sem_post(&CarnivoreQueue);
             }
         }
     }
@@ -239,6 +182,5 @@ void Vegetarian() {
             sem_wait(&Vegetarian_turn);//lock Vegetarian turnstile
         }
     }
-    //printStatus(exitStart, "Vegetarians EXITED");
     sem_post(&mutex);
 }

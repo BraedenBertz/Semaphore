@@ -9,24 +9,30 @@
 #include <unistd.h>
 #include <stdbool.h>
 #include "barrier.h"
-//tofu and bread are counters, protected by mutex. barrier is where
-//each set of three threads meets after invoking assemble_sandwhich and before allowing the next
-//set of threads to proceed.
-//tofuQueue is the semaphore tofu threads wait on; breadQueue is the
-//semaphore bread threads wait on. I am using the naming convention for queues, 
-//so tofuQueue.wait() means “join the tofu queue” and
-//tofuQueue.signal() means “release an tofu thread from the queue.”
+
+//testing syncs
+sem_t CCheckin;
+sem_t VCheckin;
+sem_t Sando;
+sem_t CCheckout;
+sem_t VCheckout;
+
 int tofu = 0;
 int meat = 0;
 int bread = 0;
 sem_t tofuQueue;
 sem_t meatQueue;
 sem_t breadQueue;
-sem_t mutex_sandwich;
-struct resuseable_barrier barrier;//Barrier for blocking sandwich ingredients
+sem_t mutex_sandwich;//Barrier for blocking sandwich ingredients
+pthread_barrier_t sldfjs;
+
+int vegInKitchen = 0;
+int carInKitchen = 0;
+
+
+extern void create_sandwich(bool veggie);
 
 void assemble_sandwich(char c) {
-    printf("%c\n", c);
 }
 
 int carnivores = 0;//The number of checked in carnivores
@@ -44,12 +50,9 @@ sem_t Carnivore_turn;
 sem_t Vegetarian_turn;
 sem_t CarnivoreQueue;
 sem_t VegetarianQueue;
+sem_t TestLock;
 
-char* CarnivoreStart = "\033[31;1m";
-char* End = "\033[00m";
-char* exitStart = "\033[30;1m";
-char* VegetarianStart = "\033[32;1m";
-void printStatus(char* msg1, char* msg2) {
+void printStatus() {
     int value, value2, value3, value4;
     sem_getvalue(&Carnivore_turn, &value);
     sem_getvalue(&Vegetarian_turn, &value2);
@@ -66,8 +69,7 @@ void printStatus(char* msg1, char* msg2) {
         case 3: stat = "TRANSITION_TO_CARNIVORE";break;
         case 4: stat = "TRANSITION_TO_VEGETARIAN";break;
     }
-    printf("\n%s%s%s\n\
-    vegetarians: %d\n\
+    printf("\nvegetarians: %d\n\
     carnivores: %d\n\
     status: %s\n\
     Carnivore_turn: %d\n\
@@ -76,8 +78,7 @@ void printStatus(char* msg1, char* msg2) {
     CarnivoreQueue: %d\n\
     mutex: %d\n\
     tid: %d\n",
-           msg1, msg2, End,
-           vegetarians, carnivores, stat, value, value2, value3, value4, value5, tid);
+    vegetarians, carnivores, stat, value, value2, value3, value4, value5, tid);
            fflush(stdout);
 }
 #endif
