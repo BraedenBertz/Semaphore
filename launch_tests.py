@@ -36,16 +36,8 @@ if __name__ == "__main__":
         "./Testing/testCarnivoreOvertake",
         "./Testing/testWaitingSwitch"
     ]
-    i = 0
-    
-    while True:
-        i+=1
-        total_points = 0
-        for executable in executables:
-            total_points += run_test(executable)
+    total_points = 0
+    for executable in executables:
+        total_points += run_test(executable)
 
-        #print(f"Total Points: {total_points} / {len(executables)}")
-        if total_points != len(executables):
-            break
-    print("Something fucked up")
-    print(i)
+    print(f"Total Points: {total_points} / {len(executables)}")
