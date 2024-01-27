@@ -1,12 +1,18 @@
-#ifndef BREAD_H
-#define BREAD_H
 #include "global.h"
-#include <assert.h>
+#include <pthread.h>
+#include <stdio.h>
+#include <stdlib.h>
+#include <semaphore.h>
+#include <unistd.h>
+
+extern sem_t tofuQueue;
+extern sem_t meatQueue;
+extern sem_t breadQueue;
+extern sem_t mutex_sandwich;
+extern pthread_barrier_t barrier;
 
 void bread_thread() {
     sem_wait(&mutex_sandwich);
-    //once we get in here, we have full control of the counters. Since this is
-    //a hydrogen thread, we want to increment the hydrogen thread
     bread++;
     if(tofu >= 1 && bread >= 2) {
         sem_post(&breadQueue);
@@ -26,7 +32,5 @@ void bread_thread() {
     }        
     sem_wait(&breadQueue); 
     assemble_sandwich('B');
-    // wait_barrier(&barrier);
-    pthread_barrier_wait(&sldfjs);
+    pthread_barrier_wait(&barrier);
 }
-#endif

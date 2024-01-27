@@ -3,8 +3,13 @@
 #include "meat.h"
 #include "tofu.h"
 
-void init_factory() {
-    sem_init(&TestLock, 0, 1);
+sem_t mutex;//mutex for the scoreboard
+sem_t Carnivore_turn;
+sem_t Vegetarian_turn;
+sem_t CarnivoreQueue;
+sem_t VegetarianQueue;
+
+void init_kitchen() {
     sem_init(&mutex, 0, 1);//This is a lock
     sem_init(&Carnivore_turn, 0, 1);//This is a turnstile
     sem_init(&Vegetarian_turn, 0, 1);//This is a turnstile
@@ -16,14 +21,13 @@ void init_factory() {
     sem_init(&tofuQueue, 0, 0);//queue for tofu
     sem_init(&breadQueue, 0, 0);//queue for bread
     sem_init(&mutex_sandwich, 0, 1);//mutex for sandwhich
-    pthread_barrier_init(&sldfjs, NULL, 3);
+    pthread_barrier_init(&barrier, NULL, 3);
 }
 
-void Carnivore() {
+void carnivore_thread() {
     //Wait to see if we can enter the store and checkin
     sem_wait(&Carnivore_turn);
     sem_post(&Carnivore_turn);
-    sem_wait(&CCheckin);
     sem_wait(&mutex);
     //A worker can check us in, update the scoreboard
     carnivores++;
@@ -62,7 +66,6 @@ void Carnivore() {
     }
     //start making the sandwhich order
     create_sandwich(false);
-    sem_wait(&CCheckout);
     //sandwhiches aren't required to hold the mutex because the mutex is for the scoreboard
     sem_wait(&mutex);
     //checkout this thread
@@ -91,14 +94,13 @@ void Carnivore() {
             }
 
         } else {
-            //there are no waiting vegetarians, so we can just make the kitchen ready
-            //for either sandwich shop
-            status = NEUTRAL;
+            if(vegetarians != 0) status = VEGETARIAN;
+            else status = NEUTRAL;
+            // status = NEUTRAL;
             for(int i = 0; i < vegetarians; i++) {
                 //let the waiting Vegetarians through
                 sem_post(&VegetarianQueue);
             }
-            //sem_post(&Vegetarian_turn);
         }
     }
 
@@ -112,16 +114,14 @@ void Carnivore() {
             sem_wait(&Carnivore_turn);
         }
     }
-
     //release the scoreboard mutex so other threads can proceed
     sem_post(&mutex);
 }
 
-void Vegetarian() {
-    
+void vegetarian_thread() {
     sem_wait(&Vegetarian_turn);//see if we are blocked from checking in
     sem_post(&Vegetarian_turn);//open the turnstile again
-    sem_wait(&VCheckin);
+    
     sem_wait(&mutex);//acquire the lock
     vegetarians++;
 
@@ -148,7 +148,6 @@ void Vegetarian() {
     }
 
     create_sandwich(true);
-    sem_wait(&VCheckout);
     sem_wait(&mutex);
     vegetarians--;
 
@@ -169,7 +168,9 @@ void Vegetarian() {
             }
 
         } else {
-            status = NEUTRAL;
+            if(carnivores != 0) status = CARNIVORE;
+            else status = NEUTRAL;
+            // status = NEUTRAL;//wrong implementation
             for(int i = 0; i < carnivores; i++) {
                 sem_post(&CarnivoreQueue);
             }

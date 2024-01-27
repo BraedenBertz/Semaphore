@@ -1,6 +1,15 @@
-#ifndef TOFU_H
-#define TOFU_H
 #include "global.h"
+#include <pthread.h>
+#include <stdio.h>
+#include <stdlib.h>
+#include <semaphore.h>
+#include <unistd.h>
+
+sem_t tofuQueue;
+sem_t meatQueue;
+sem_t breadQueue;
+sem_t mutex_sandwich;
+pthread_barrier_t barrier;
 
 void tofu_thread() {
     sem_wait(&mutex_sandwich);
@@ -17,9 +26,6 @@ void tofu_thread() {
     
     sem_wait(&tofuQueue);
     assemble_sandwich('T');
-    // wait_barrier(&barrier);
-    pthread_barrier_wait(&sldfjs);
-    
+    pthread_barrier_wait(&barrier);
     sem_post(&mutex_sandwich);
 }
-#endif

@@ -1,7 +1,15 @@
-#ifndef MEAT_H
-#define MEAT_H
 #include "global.h"
-#include <assert.h>
+#include <pthread.h>
+#include <stdio.h>
+#include <stdlib.h>
+#include <semaphore.h>
+#include <unistd.h>
+
+extern sem_t tofuQueue;
+extern sem_t meatQueue;
+extern sem_t breadQueue;
+extern sem_t mutex_sandwich;
+extern pthread_barrier_t barrier;
 void meat_thread() {
     sem_wait(&mutex_sandwich);
     meat++;
@@ -16,9 +24,6 @@ void meat_thread() {
     }
     sem_wait(&meatQueue);
     assemble_sandwich('M'); 
-    //wait_barrier(&barrier);
-    pthread_barrier_wait(&sldfjs);
-    // printf("\n");
-    sem_post(&mutex_sandwich); 
+    pthread_barrier_wait(&barrier);
+    sem_post(&mutex_sandwich);
 }
-#endif
